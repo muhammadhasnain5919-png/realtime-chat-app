@@ -9,7 +9,14 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       minlength: 3,
-      maxlength: 30,
+      maxlength: 32,
+      lowercase: true,
+    },
+    displayName: {
+      type: String,
+      trim: true,
+      maxlength: 32,
+      default: '',
     },
     email: {
       type: String,
@@ -17,6 +24,20 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    phone: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    bio: {
+      type: String,
+      default: '',
+      maxlength: 190,
     },
     password: {
       type: String,
@@ -26,6 +47,16 @@ const userSchema = new mongoose.Schema(
     avatar: {
       type: String,
       default: '',
+    },
+    status: {
+      type: String,
+      enum: ['online', 'idle', 'dnd', 'offline'],
+      default: 'offline',
+    },
+    customStatus: {
+      type: String,
+      default: '',
+      maxlength: 128,
     },
     isOnline: {
       type: Boolean,
@@ -40,6 +71,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre('save', async function (next) {
+  if (!this.displayName) this.displayName = this.username;
   if (!this.isModified('password')) return next();
   try {
     const salt = await bcrypt.genSalt(10);
