@@ -16,15 +16,29 @@ const Message = require('./models/Message');
 const app = express();
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true,
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'https://localhost:3000',
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // allow all for now so frontend can connect
+    }
   },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+};
+
+const io = new Server(server, {
+  cors: corsOptions,
 });
 
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -36,11 +50,18 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/health', (req, res) => {
+  res.send('OK');
+});
+
 const onlineUsers = new Map();
 
 io.use(async (socket, next) => {
   try {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token ||
+      socket.handshake.headers?.authorization?.replace('Bearer ', '');
     if (!token) return next(new Error('Authentication error: No token'));
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
@@ -69,13 +90,27 @@ io.on('connection', async (socket) => {
         if (typeof callback === 'function') callback({ success: false, error: 'Invalid message data' });
         return;
       }
-      const message = new Message({ sender: userId, receiver: receiverId, content: content.trim(), delivered: false, read: false });
+      const message = new Message({
+        sender: userId,
+        receiver: receiverId,
+        content: content.trim(),
+        delivered: false,
+        read: false,
+      });
       await message.save();
       await message.populate('sender', 'username avatar');
       await message.populate('receiver', 'username avatar');
-      const messagePayload = { _id: message._id, sender: message.sender, receiver: message.receiver, content: message.content, delivered: message.delivered, read: message.read, createdAt: message.createdAt, type: message.type };
-      const receiverSocketId = onlineUsers.get(receiverId);
-      if (receiverSocketId) {
+      const messagePayload = {
+        _id: message._id,
+        sender: message.sender,
+        receiver: message.receiver,
+        content: message.content,
+        delivered: message.delivered,
+        read: message.read,
+        createdAt: message.createdAt,
+        type: message.type,
+      };
+      if (onlineUsers.get(receiverId)) {
         io.to(receiverId).emit('receiveMessage', messagePayload);
         message.delivered = true;
         await message.save();
@@ -92,13 +127,20 @@ io.on('connection', async (socket) => {
 
   socket.on('typing', ({ receiverId, isTyping }) => {
     if (onlineUsers.get(receiverId)) {
-      io.to(receiverId).emit('userTyping', { userId, username: socket.user.username, isTyping: !!isTyping });
+      io.to(receiverId).emit('userTyping', {
+        userId,
+        username: socket.user.username,
+        isTyping: !!isTyping,
+      });
     }
   });
 
   socket.on('markAsRead', async ({ senderId }) => {
     try {
-      const result = await Message.updateMany({ sender: senderId, receiver: userId, read: false }, { $set: { read: true, delivered: true } });
+      const result = await Message.updateMany(
+        { sender: senderId, receiver: userId, read: false },
+        { $set: { read: true, delivered: true } }
+      );
       if (onlineUsers.get(senderId)) {
         io.to(senderId).emit('messagesRead', { readerId: userId, count: result.modifiedCount });
       }
@@ -111,20 +153,27 @@ io.on('connection', async (socket) => {
     console.log(`User disconnected: ${socket.user.username} (${userId})`);
     onlineUsers.delete(userId);
     await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
-    socket.broadcast.emit('userOffline', { userId, username: socket.user.username, lastSeen: new Date() });
+    socket.broadcast.emit('userOffline', {
+      userId,
+      username: socket.user.username,
+      lastSeen: new Date(),
+    });
   });
 });
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/chat-app';
 
-mongoose.connect(MONGO_URI).then(() => {
-  console.log('MongoDB connected');
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log('Socket.IO ready');
+mongoose
+  .connect(MONGO_URI)
+  .then(() => {
+    console.log('MongoDB connected');
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log('Socket.IO ready');
+    });
+  })
+  .catch((err) => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
-});
