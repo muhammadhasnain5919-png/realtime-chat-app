@@ -10,14 +10,12 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = Cookies.get('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (r) => r,
   (error) => {
     if (error.response?.status === 401) {
       Cookies.remove('token');
@@ -30,3 +28,11 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+export const uid = (u?: User | string | null) => {
+  if (!u) return '';
+  if (typeof u === 'string') return u;
+  return u.id || u._id || '';
+};
+
+import type { User } from '@/types';

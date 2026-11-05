@@ -2,9 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+:root {
+  --bg-primary: #1e1f22;
+  --bg-secondary: #2b2d31;
+  --bg-tertiary: #313338;
+  --bg-modifier: #35373c;
+  --bg-accent: #5865f2;
+  --bg-accent-hover: #4752c4;
+  --text-normal: #dbdee1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+  --green: #23a559;
+  --red: #f23f43;
+  --yellow: #f0b232;
+}
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #1f2937; }
-::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--bg-primary); color: var(--text-normal); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #0e0f11; }
+
+.discord-input {
+  background: #1e1f22;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-normal);
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+}
+.discord-input:focus { box-shadow: 0 0 0 1px var(--bg-accent); }
+
+.discord-btn {
+  background: var(--bg-accent);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.discord-btn:hover { background: var(--bg-accent-hover); }
+.discord-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.discord-btn-secondary {
+  background: #4e5058;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.discord-btn-secondary:hover { background: #6d6f78; }
+
+.discord-btn-danger {
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-secondary);
+}
+.status-online { background: var(--green); }
+.status-idle { background: var(--yellow); }
+.status-dnd { background: var(--red); }
+.status-offline { background: #80848e; }
