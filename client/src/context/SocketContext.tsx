@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Cookies from 'js-cookie';
 
@@ -22,7 +22,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     const token = Cookies.get('token');
@@ -33,9 +32,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       transports: ['websocket', 'polling'],
     });
 
-    socketRef.current = s;
     setSocket(s);
-
     s.on('connect', () => setIsConnected(true));
     s.on('disconnect', () => setIsConnected(false));
     s.on('onlineUsers', (ids: string[]) => setOnlineUsers(ids));
@@ -48,7 +45,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       s.disconnect();
-      socketRef.current = null;
     };
   }, []);
 

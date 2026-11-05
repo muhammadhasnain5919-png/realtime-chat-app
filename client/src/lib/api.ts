@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import type { User } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://realtime-chat-app-kmjnrg.fly.dev/api';
 
@@ -32,7 +33,5 @@ export default api;
 export const uid = (u?: User | string | null) => {
   if (!u) return '';
   if (typeof u === 'string') return u;
-  return u.id || u._id || '';
+  return (u.id || u._id || '') as string;
 };
-
-import type { User } from '@/types';
