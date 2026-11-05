@@ -1,15 +1,14 @@
-# fly.toml app configuration file generated for realtime-chat-app-nk--4g on 2026-11-03T10:12:04Z
+# fly.toml app configuration file generated for realtime-chat-app-kmjnrg on 2026-11-05T09:17:51Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'realtime-chat-app-nk--4g'
-primary_region = 'sin'
+app = 'realtime-chat-app-kmjnrg'
+primary_region = 'ams'
 
 [build]
-
 [http_service]
-  internal_port = 10000
+  internal_port = 8080
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
