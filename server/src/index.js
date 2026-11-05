@@ -10,33 +10,23 @@ const jwt = require('jsonwebtoken');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
+const friendsRoutes = require('./routes/friends');
+const profileRoutes = require('./routes/profile');
 const User = require('./models/User');
 const Message = require('./models/Message');
 
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:3000',
-  'https://localhost:3000',
-].filter(Boolean);
-
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      callback(null, true);
-    } else {
-      callback(null, true); // allow all for now so frontend can connect
-    }
+    callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 };
 
-const io = new Server(server, {
-  cors: corsOptions,
-});
+const io = new Server(server, { cors: corsOptions });
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -45,14 +35,13 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-
-app.get('/health', (req, res) => {
-  res.send('OK');
-});
+app.get('/health', (req, res) => res.send('OK'));
 
 const onlineUsers = new Map();
 
@@ -69,16 +58,14 @@ io.use(async (socket, next) => {
     socket.user = user;
     next();
   } catch (err) {
-    console.error('Socket auth error:', err.message);
     next(new Error('Authentication error'));
   }
 });
 
 io.on('connection', async (socket) => {
   const userId = socket.user._id.toString();
-  console.log(`User connected: ${socket.user.username} (${userId})`);
   onlineUsers.set(userId, socket.id);
-  await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
+  await User.findByIdAndUpdate(userId, { isOnline: true, status: 'online', lastSeen: new Date() });
   socket.broadcast.emit('userOnline', { userId, username: socket.user.username });
   socket.emit('onlineUsers', Array.from(onlineUsers.keys()));
   socket.join(userId);
@@ -98,8 +85,8 @@ io.on('connection', async (socket) => {
         read: false,
       });
       await message.save();
-      await message.populate('sender', 'username avatar');
-      await message.populate('receiver', 'username avatar');
+      await message.populate('sender', 'username displayName avatar');
+      await message.populate('receiver', 'username displayName avatar');
       const messagePayload = {
         _id: message._id,
         sender: message.sender,
@@ -120,7 +107,6 @@ io.on('connection', async (socket) => {
       socket.emit('receiveMessage', messagePayload);
       if (typeof callback === 'function') callback({ success: true, message: messagePayload });
     } catch (err) {
-      console.error('sendMessage error:', err);
       if (typeof callback === 'function') callback({ success: false, error: 'Failed to send message' });
     }
   });
@@ -129,7 +115,7 @@ io.on('connection', async (socket) => {
     if (onlineUsers.get(receiverId)) {
       io.to(receiverId).emit('userTyping', {
         userId,
-        username: socket.user.username,
+        username: socket.user.displayName || socket.user.username,
         isTyping: !!isTyping,
       });
     }
@@ -144,15 +130,55 @@ io.on('connection', async (socket) => {
       if (onlineUsers.get(senderId)) {
         io.to(senderId).emit('messagesRead', { readerId: userId, count: result.modifiedCount });
       }
-    } catch (err) {
-      console.error('markAsRead error:', err);
+    } catch (err) {}
+  });
+
+  // WebRTC signaling for 1:1 voice/video/screen
+  socket.on('call:invite', ({ to, callType }) => {
+    const targetSocket = onlineUsers.get(to);
+    if (targetSocket) {
+      io.to(to).emit('call:incoming', {
+        from: userId,
+        fromUser: {
+          id: userId,
+          username: socket.user.username,
+          displayName: socket.user.displayName || socket.user.username,
+          avatar: socket.user.avatar,
+        },
+        callType: callType || 'video',
+      });
+    } else {
+      socket.emit('call:unavailable', { to });
     }
   });
 
+  socket.on('call:accept', ({ to }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('call:accepted', { from: userId });
+  });
+
+  socket.on('call:reject', ({ to }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('call:rejected', { from: userId });
+  });
+
+  socket.on('call:end', ({ to }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('call:ended', { from: userId });
+  });
+
+  socket.on('webrtc:offer', ({ to, offer }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('webrtc:offer', { from: userId, offer });
+  });
+
+  socket.on('webrtc:answer', ({ to, answer }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('webrtc:answer', { from: userId, answer });
+  });
+
+  socket.on('webrtc:ice', ({ to, candidate }) => {
+    if (onlineUsers.get(to)) io.to(to).emit('webrtc:ice', { from: userId, candidate });
+  });
+
   socket.on('disconnect', async () => {
-    console.log(`User disconnected: ${socket.user.username} (${userId})`);
     onlineUsers.delete(userId);
-    await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
+    await User.findByIdAndUpdate(userId, { isOnline: false, status: 'offline', lastSeen: new Date() });
     socket.broadcast.emit('userOffline', {
       userId,
       username: socket.user.username,
@@ -170,7 +196,6 @@ mongoose
     console.log('MongoDB connected');
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
-      console.log('Socket.IO ready');
     });
   })
   .catch((err) => {
